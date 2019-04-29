@@ -13,7 +13,7 @@ def get_pred(path):
             continue
         bbox = line.split(',')
         if len(bbox) % 2 == 1:
-            print path
+            print(path)
         bbox = [(int)(x) for x in bbox]
         bboxes.append(bbox)
     return bboxes
@@ -86,9 +86,9 @@ if __name__ == '__main__':
             else:
                 fp += 1.0
 
-    print tp, fp, npos
+    print(tp, fp, npos)
     precision = tp / (tp + fp)
     recall = tp / npos
     hmean = 0 if (precision + recall) == 0 else 2.0 * precision * recall / (precision + recall)
 
-    print 'p: %.4f, r: %.4f, f: %.4f'%(precision, recall, hmean)
+    print('p: %.4f, r: %.4f, f: %.4f'%(precision, recall, hmean))
