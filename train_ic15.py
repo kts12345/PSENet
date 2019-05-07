@@ -16,6 +16,8 @@ import models
 from util import Logger, AverageMeter
 import time
 import util
+import shy
+shy.err_hook()
 
 def ohem_single(score, gt_text, training_mask):
     pos_num = (int)(np.sum(gt_text > 0.5)) - (int)(np.sum((gt_text > 0.5) & (training_mask <= 0.5)))

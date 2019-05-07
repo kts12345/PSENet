@@ -10,12 +10,13 @@ import torchvision.transforms as transforms
 import torch
 import pyclipper
 import Polygon as plg
+import pdb
 
 ic15_root_dir = './data/ICDAR2015/Challenge4/'
 ic15_train_data_dir = ic15_root_dir + 'ch4_training_images/'
-ic15_train_gt_dir = ic15_root_dir + 'ch4_training_localization_transcription_gt/'
-ic15_test_data_dir = ic15_root_dir + 'ch4_test_images/'
-ic15_test_gt_dir = ic15_root_dir + 'ch4_test_localization_transcription_gt/'
+ic15_train_gt_dir   = ic15_root_dir + 'ch4_training_localization_transcription_gt/'
+ic15_test_data_dir  = ic15_root_dir + 'ch4_test_images/'
+ic15_test_gt_dir    = ic15_root_dir + 'ch4_test_localization_transcription_gt/'
 
 random.seed(123456)
 
@@ -28,6 +29,11 @@ def get_img(img_path):
         raise
     return img
 
+'''
+리턴값의 tags: 단어가 # 으로 시작하는 box는 False 로 표시.
+라인당,  8개의 숫자가, 로 구분되어 있다고 가정. , 로 분리했을 때 맨 마지막에는 단어가 온다고 가정 
+      즉, 1,2,3,4,5,6,7,8,무시, 무시, 무시,단어 형태를 기대함.
+'''
 def get_bboxes(img, gt_path):
     h, w = img.shape[0:2]
     lines = util.io.read_lines(gt_path)
@@ -45,6 +51,9 @@ def get_bboxes(img, gt_path):
         bboxes.append(box)
     return np.array(bboxes), tags
 
+'''
+질문: 왜 copy().flip() 이 아니라 flip().copy() 일까?
+'''
 def random_horizontal_flip(imgs):
     if random.random() < 0.5:
         for i in range(len(imgs)):
@@ -53,7 +62,9 @@ def random_horizontal_flip(imgs):
 
 def random_rotate(imgs):
     max_angle = 10
-    angle = random.random() * 2 * max_angle - max_angle
+    #angle = random.random() * 2 * max_angle - max_angle
+    angle = random.uniform(-max_angle, max_angle)
+    
     for i in range(len(imgs)):
         img = imgs[i]
         w, h = img.shape[:2]
@@ -68,6 +79,16 @@ def scale(img, long_size=2240):
     img = cv2.resize(img, dsize=None, fx=scale, fy=scale)
     return img
 
+'''
+clipping scale: 긴 쪽이 1280 보다 더 크면 긴 쪽을 1280에 맞춘다
+random scale:   0.5, 1, 2, 3 배 중에 하나를 랜덤 선택한다.
+clipping scale: 짧은 쪽이 min_size(640) 보다 작으면 짧은 쪽이 min_size + 10 이 되게 한다.
+결과:
+    짧은 쪽 길이는 650 이상이다
+    긴쪽 길이는 1280*3=3840 이하이다.
+    짧은 쪽 길이가 조정된 650이 아닐 때 긴쪽 길이는 640, 1280, 2560, 3840 이다.
+
+'''
 def random_scale(img, min_size):
     h, w = img.shape[0:2]
     if max(h, w) > 1280:
@@ -82,6 +103,15 @@ def random_scale(img, min_size):
     img = cv2.resize(img, dsize=None, fx=scale, fy=scale)
     return img
 
+'''
+입력:
+    img_size=(640,640)
+    imgs: 최소 (640, 640) 이상의 해상도를 가진 이미지들의 리스트. 3채널이미지, 1채널 이미지들
+    
+출력:
+    img_size=(640, 640)크기로 크롭된 이미지
+    
+'''
 def random_crop(imgs, img_size):
     h, w = imgs[0].shape[0:2]
     th, tw = img_size
@@ -103,12 +133,15 @@ def random_crop(imgs, img_size):
         j = random.randint(0, w - tw)
     
     # return i, j, th, tw
-    for idx in range(len(imgs)):
-        if len(imgs[idx].shape) == 3:
-            imgs[idx] = imgs[idx][i:i + th, j:j + tw, :]
-        else:
-            imgs[idx] = imgs[idx][i:i + th, j:j + tw]
-    return imgs
+    #for idx in range(len(imgs)):
+    #    if len(imgs[idx].shape) == 3:
+    #        imgs[idx] = imgs[idx][i:i + th, j:j + tw, :]
+    #    else:
+    #        imgs[idx] = imgs[idx][i:i + th, j:j + tw]
+    #return imgs
+
+    return [img[i:i+th, j:j+tw] for img in imgs]
+        
 
 def dist(a, b):
     return np.sqrt(np.sum((a - b) ** 2))
@@ -145,7 +178,13 @@ def shrink(bboxes, rate, max_shr=20):
     return np.array(shrinked_bboxes)
 
 class IC15Loader(data.Dataset):
+    # 훈련시에는 아래와 같이 호출함
+    #     is_transform = True
+    #     img_size = 640
+    #     kernel_num= 7
+    #     min_scale = 0.4
     def __init__(self, is_transform=False, img_size=None, kernel_num=7, min_scale=0.4):
+        
         self.is_transform = is_transform
         
         self.img_size = img_size if (img_size is None or isinstance(img_size, tuple)) else (img_size, img_size)
@@ -153,7 +192,7 @@ class IC15Loader(data.Dataset):
         self.min_scale = min_scale
 
         data_dirs = [ic15_train_data_dir]
-        gt_dirs = [ic15_train_gt_dir]
+        gt_dirs   = [ic15_train_gt_dir]
 
         self.img_paths = []
         self.gt_paths = []
@@ -192,15 +231,16 @@ class IC15Loader(data.Dataset):
         gt_text = np.zeros(img.shape[0:2], dtype='uint8')
         training_mask = np.ones(img.shape[0:2], dtype='uint8')
         if bboxes.shape[0] > 0:
-            bboxes = np.reshape(bboxes * ([img.shape[1], img.shape[0]] * 4), (bboxes.shape[0], bboxes.shape[1] / 2, 2)).astype('int32')
+            bboxes = np.reshape(bboxes * ([img.shape[1], img.shape[0]] * 4), (bboxes.shape[0], int(bboxes.shape[1] / 2), 2)).astype('int32')
             for i in range(bboxes.shape[0]):
                 cv2.drawContours(gt_text, [bboxes[i]], -1, i + 1, -1)
                 if not tags[i]:
                     cv2.drawContours(training_mask, [bboxes[i]], -1, 0, -1)
 
         gt_kernels = []
-        for i in range(1, self.kernel_num):
-            rate = 1.0 - (1.0 - self.min_scale) / (self.kernel_num - 1) * i
+        #for i in range(1, self.kernel_num):
+        #    rate = (1.0 - (1.0 - self.min_scale) / (self.kernel_num - 1) * i)
+        for rate in np.linspace(self.min_scale, 1.0)[:-1]:
             gt_kernel = np.zeros(img.shape[0:2], dtype='uint8')
             kernel_bboxes = shrink(bboxes, rate)
             for i in range(bboxes.shape[0]):
@@ -220,7 +260,6 @@ class IC15Loader(data.Dataset):
         gt_text[gt_text > 0] = 1
         gt_kernels = np.array(gt_kernels)
 
-        # '''
         if self.is_transform:
             img = Image.fromarray(img)
             img = img.convert('RGB')
