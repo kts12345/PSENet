@@ -47,7 +47,7 @@ class IC15TestLoader(data.Dataset):
             
             self.img_paths.extend(img_paths)
 
-        part_size = len(self.img_paths) / part_num
+        part_size = int(len(self.img_paths) / part_num)
         l = part_id * part_size
         r = (part_id + 1) * part_size
         self.img_paths = self.img_paths[l:r]

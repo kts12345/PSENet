@@ -12,22 +12,22 @@ def pse(kernals, min_area):
         if np.sum(label == label_idx) < min_area:
             label[label == label_idx] = 0
 
-    queue = queue.Queue(maxsize = 0)
+    cur_queue = queue.Queue(maxsize = 0)
     next_queue = queue.Queue(maxsize = 0)
     points = np.array(np.where(label > 0)).transpose((1, 0))
     
     for point_idx in range(points.shape[0]):
         x, y = points[point_idx, 0], points[point_idx, 1]
         l = label[x, y]
-        queue.put((x, y, l))
+        cur_queue.put((x, y, l))
         pred[x, y] = l
 
     dx = [-1, 1, 0, 0]
     dy = [0, 0, -1, 1]
     for kernal_idx in range(kernal_num - 2, -1, -1):
         kernal = kernals[kernal_idx].copy()
-        while not queue.empty():
-            (x, y, l) = queue.get()
+        while not cur_queue.empty():
+            (x, y, l) = cur_queue.get()
 
             is_edge = True
             for j in range(4):
@@ -38,19 +38,19 @@ def pse(kernals, min_area):
                 if kernal[tmpx, tmpy] == 0 or pred[tmpx, tmpy] > 0:
                     continue
 
-                queue.put((tmpx, tmpy, l))
+                cur_queue.put((tmpx, tmpy, l))
                 pred[tmpx, tmpy] = l
                 is_edge = False
             if is_edge:
                 next_queue.put((x, y, l))
         
         # kernal[pred > 0] = 0
-        queue, next_queue = next_queue, queue
+        cur_queue, next_queue = next_queue, cur_queue
         
         # points = np.array(np.where(pred > 0)).transpose((1, 0))
         # for point_idx in range(points.shape[0]):
         #     x, y = points[point_idx, 0], points[point_idx, 1]
         #     l = pred[x, y]
-        #     queue.put((x, y, l))
+        #     cur_queue.put((x, y, l))
 
     return pred
